@@ -1,16 +1,75 @@
+
 const express = require('express');
 const router = express.Router();
 const Client = require('../models/Client');
+const adminAuth = require('../middleware/auth');
 
-// Client login
+// Hardcoded admin credentials
+const ADMIN_USERNAME = 'admin';
+const ADMIN_PASSWORD = 'admin123';
+
+// POST /api/login
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
-    const client = await Client.findOne({ username, password });
-    if (client) {
-        res.json({ message: 'Client login successful' });
-    } else {
-        res.status(401).json({ message: 'Invalid client credentials' });
+
+    // Check admin credentials
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+        return res.json({
+            success: true,
+            message: 'Admin login successful',
+            data: { role: 'admin', username }
+        });
+    }
+
+    // Check client credentials
+    try {
+        const client = await Client.findOne({ username, password });
+        if (client) {
+            return res.json({
+                success: true,
+                message: 'Client Login successful',
+                data: { role: 'client', username }
+            });
+        } else {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials'
+            });
+        }
+    } catch (err) {
+        return res.status(500).json({
+            success: false,
+            message: 'Server error'
+        });
     }
 });
+// Create client (admin only)
+router.post('/create-client', adminAuth, async (req, res) => {
+    const { clientUsername, clientPassword } = req.body;
+    if (!clientUsername || !clientPassword) {
+        return res.status(400).json({ message: 'Client username and password required' });
+    }
+    try {
+        const existing = await Client.findOne({ username: clientUsername });
+        if (existing) {
+            return res.status(409).json({ message: 'Client username already exists' });
+        }
+        const client = new Client({ username: clientUsername, password: clientPassword });
+        await client.save();
+        // res.json({ message: 'Client created successfully' });
 
+        return res.json({
+                success: true,
+                message: 'Client created successfully',
+                data: { role: 'client', clientUsername }
+            });
+
+    } catch (err) {
+        // Improved error reporting
+        res.status(500).json({ message: 'Error creating client', error: err.message });
+    }
+
+    
+});
 module.exports = router;
+
